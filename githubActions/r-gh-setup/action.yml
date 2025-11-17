@@ -59,6 +59,33 @@ runs:
           libgdal-dev
         version: ${{ inputs.cache_version || 1 }}
 
+    #try repairing cache for python, since gobject-introspection related runtimes get removed in awalsh128/cache-apt-pkgs-action@v1.4.3, preventing python3 from installing.
+    - name: Repair dpkg / Python3 if needed
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "== check dpkg status =="
+        sudo dpkg --configure -a || true
+
+        echo "== update and try to fix broken deps =="
+        sudo apt-get update -y
+        sudo apt-get install -f -y || true
+
+        echo "== reinstall / restore packages that trigger rtupdate hooks =="
+        sudo apt-get install -y --reinstall \
+          gobject-introspection gobject-introspection-dev gobject-introspection-bin \
+          python3 python3-minimal python3-venv python3-dev \
+          libglib2.0-dev libglib2.0-dev-bin libharfbuzz-dev || true
+
+        echo "== re-run configure/fix in case reinstallation unblocks others =="
+        sudo dpkg --configure -a || true
+        sudo apt-get install -f -y || true
+        sudo apt-get clean
+
+        echo "== sanity checks =="
+        python3 --version || echo "python3 not available"
+        dpkg -l | egrep 'gobject-introspection|python3|libglib2.0' || true
+
 
     # NOTE: patsy added due to scanpy / python2 issue. Should eventually drop
     # NOTE: pandas>=2.2.3 used to force compatibility with numpy>2
